@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Панель Ведущего</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container host-panel">
+        <header>
+            <h1>🎙️ Панель Ведущего</h1>
+            <div class="room-code-box">Код комнаты: <span id="displayCode">...</span></div>
+        </header>
+
+        <div class="game-area">
+            <!-- Блок с текущим вопросом -->
+            <div class="question-box">
+                <h3>Текущая песня:</h3>
+                <p id="songTitle">Загрузка...</p>
+                <div id="fullLyrics" class="lyrics-text">...</div>
+            </div>
+
+            <!-- Блок с ответами игроков -->
+            <div class="answers-box">
+                <h3>Входящие ответы:</h3>
+                <ul id="answersList">
+                    <li>Ожидание ответов...</li>
+                </ul>
+            </div>
+        </div>
+
+        <button class="btn btn-next" onclick="nextRound()">⏭️ Следующий раунд</button>
+    </div>
+    <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+    <script>
+        // Специфичная логика для хоста при загрузке
+        initHost();
+    </script>
+</body>
+</html>

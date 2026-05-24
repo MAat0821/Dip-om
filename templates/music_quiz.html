@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выберите песню - Тест по музыке</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Выберите песню для теста</h1>
+
+        <div class="song-list">
+            {% for song in songs %}
+            <div class="song-card" onclick="window.location.href='/music-quiz/{{ song.id }}'">
+                <div class="song-info">
+                    <h3>{{ song.title }}</h3>
+                    <div class="song-duration">⏱ {{ song.duration }}</div>
+                </div>
+                <div class="play-icon">▶</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="text-center">
+            <a href="/" class="back-btn">← На главную</a>
+        </div>
+    </div>
+</body>
+</html>

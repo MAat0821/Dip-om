@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Игрок</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container player-screen">
+        <h2 id="playerNick">Игрок</h2>
+
+        <div class="card">
+            <div class="lyrics-display" id="maskedLyrics">
+                Загрузка текста...
+            </div>
+
+            <audio id="audioPlayer" controls>
+                <source src="" type="audio/mpeg">
+                Ваш браузер не поддерживает аудио.
+            </audio>
+
+            <div class="controls">
+                <input type="text" id="guessInput" placeholder="Какое слово пропущено?">
+                <button class="btn btn-submit" onclick="submitGuess()">Отправить ответ</button>
+            </div>
+            <div id="resultMsg"></div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+    <script>
+        // Логика игрока при старте
+        initPlayer();
+    </script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Квиз "Студенческая весна"</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Квиз "Студенческая весна"</h1>
+
+        <button class="btn btn-host" onclick="window.location.href='/host'">
+            🎤 Я Ведущий
+        </button>
+
+        <div class="join-form">
+            <h3>Присоединиться к игре</h3>
+            <input type="text" id="roomCode" placeholder="Код комнаты" maxlength="4" style="text-transform: uppercase;">
+            <input type="text" id="nickname" placeholder="Ваш никнейм">
+            <p id="joinError" class="error-message"></p>
+            <button class="btn btn-player" onclick="joinGame()">Войти в игру</button>
+        </div>
+
+        <hr class="divider">
+
+        <div class="games-menu">
+            <h2>🎮 Выберите режим игры</h2>
+
+            <div class="game-option" onclick="window.location.href='/music-quiz'">
+                <h3>🎵 Тест по музыке</h3>
+                <p>Угадайте пропущенные слова в песнях</p>
+            </div>
+
+            <div class="game-option" onclick="alert('Скоро будет доступна!')">
+                <h3>🎤 Угадай мелодию</h3>
+                <p>Прослушайте фрагмент и угадайте песню</p>
+            </div>
+
+            <div class="game-option" onclick="alert('Скоро будет доступна!')">
+                <h3>❓ Викторина</h3>
+                <p>Классический квиз с вопросами</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+</body>
+</html>
