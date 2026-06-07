@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Создание комнаты - Квиз</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Создание новой игры</h1>
+
+        <form method="POST" action="{{ url_for('api.host_create') }}">
+            <div class="form-group">
+                <label for="host_name">👤 Ваше имя</label>
+                <input type="text" id="host_name" name="host_name" class="form-control"
+                       placeholder="Введите ваше имя" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label>🎯 Выберите тип игры</label>
+                <div class="game-types">
+                    <label class="game-type-option" onclick="selectGameType(this, 'music_test')">
+                        <input type="radio" name="game_type" value="music_test" required>
+                        <h3>🎵 Тест по музыке</h3>
+                        <p>Угадайте пропущенные слова в песнях</p>
+                    </label>
+
+                    <label class="game-type-option" onclick="selectGameType(this, 'guess_melody')">
+                        <input type="radio" name="game_type" value="guess_melody">
+                        <h3>🎤 Угадай мелодию</h3>
+                        <p>Прослушайте фрагмент и угадайте песню</p>
+                    </label>
+
+                    <label class="game-type-option" onclick="selectGameType(this, 'quiz')">
+                        <input type="radio" name="game_type" value="quiz">
+                        <h3>❓ Викторина</h3>
+                        <p>Классический квиз с вопросами</p>
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-host">🚀 Создать комнату</button>
+        </form>
+
+        <div class="back-link">
+            <a href="{{ url_for('api.index') }}">← Вернуться на главную</a>
+        </div>
+    </div>
+
+    <script>
+        function selectGameType(element, value) {
+            document.querySelectorAll('.game-type-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            element.querySelector('input[type="radio"]').checked = true;
+        }
+    </script>
+</body>
+</html>

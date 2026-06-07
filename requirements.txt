@@ -1,3 +1,4 @@
-Flask
-Flask-sqlalchemy
-pydub
+Flask==2.3.3
+Flask-SQLAlchemy==3.1.1
+Werkzeug==2.3.7
+mutagen==1.47.0  # 🆕 Для работы с MP3

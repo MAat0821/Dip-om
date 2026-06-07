@@ -1,30 +1,62 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Выберите песню - Тест по музыке</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <h1>🎵 Выберите песню для теста</h1>
+{% extends "admin/base.html" %}
 
-        <div class="song-list">
-            {% for song in songs %}
-            <div class="song-card" onclick="window.location.href='/music-quiz/{{ song.id }}'">
-                <div class="song-info">
-                    <h3>{{ song.title }}</h3>
-                    <div class="song-duration">⏱ {{ song.duration }}</div>
-                </div>
-                <div class="play-icon">▶</div>
+{% block content %}
+<h2>🎵 Управление музыкой</h2>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5>Загрузить трек</h5>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <div class="mb-3">
+                <input type="text" class="form-control" name="title" placeholder="Название" required>
             </div>
-            {% endfor %}
-        </div>
+            <div class="mb-3">
+                <input type="text" class="form-control" name="artist" placeholder="Исполнитель">
+            </div>
+            <div class="mb-3">
+                <input type="file" class="form-control" name="file" accept=".mp3,.wav,.ogg" required>
+            </div>
+            <button type="submit" class="btn btn-primary">📤 Загрузить</button>
+        </form>
+    </div>
+</div>
 
-        <div class="text-center">
-            <a href="/" class="back-btn">← На главную</a>
+<h4>Загруженные треки</h4>
+<div class="list-group">
+    {% for track in tracks %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+            <strong>{{ track.title }}</strong> - {{ track.artist }}
+        </div>
+        <div>
+            <audio controls class="me-2" style="height: 30px;">
+                <source src="{{ url_for('static', filename='uploads/music/' + track.filename) }}">
+            </audio>
+            <button class="btn btn-sm btn-danger" onclick="deleteTrack({{ track.id }})">🗑️</button>
         </div>
     </div>
-</body>
-</html>
+    {% endfor %}
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    const response = await fetch('/admin/music/upload', {
+        method: 'POST',
+        body: formData
+    });
+    
+    if (response.ok) {
+        location.reload();
+    }
+});
+
+async function deleteTrack(id) {
+    if (!confirm('Удалить трек?')) return;
+    await fetch(`/admin/music/${id}`, {method: 'DELETE'});
+    location.reload();
+}
+</script>
+{% endblock %}

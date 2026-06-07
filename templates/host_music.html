@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление музыкой - Квиз</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .music-panel {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .upload-card, .tracks-list {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .track-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.3s;
+        }
+        .track-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        .track-info {
+            flex: 1;
+        }
+        .track-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #333;
+        }
+        .track-artist {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 3px;
+        }
+        .track-actions {
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .btn-sm {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+            transform: scale(1.05);
+        }
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .navigation-buttons {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-nav {
+            padding: 12px 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-block;
+            font-size: 1rem;
+        }
+        .btn-back-host {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-back-host:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-back-home {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-back-home:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+        .status-message {
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.95rem;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-loading {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .tracks-count {
+            background: #667eea;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            margin-left: 10px;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .music-panel {
+                grid-template-columns: 1fr;
+            }
+            .track-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .track-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Управление музыкой</h1>
+
+        <div class="music-panel">
+            <!-- Левая колонка - загрузка трека -->
+            <div class="upload-card">
+                <h3>📤 Загрузить новый трек</h3>
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="title">Название песни</label>
+                        <input type="text" id="title" name="title" class="form-control"
+                               placeholder="Например: Катюша" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="artist">Исполнитель</label>
+                        <input type="text" id="artist" name="artist" class="form-control"
+                               placeholder="Например: Лидия Русланова">
+                    </div>
+                    <div class="form-group">
+                        <label for="file">MP3 файл</label>
+                        <input type="file" id="file" name="file" class="form-control"
+                               accept=".mp3,audio/mpeg" required>
+                    </div>
+                    <button type="submit" class="btn btn-host" style="width: 100%;">📤 Загрузить</button>
+                </form>
+                <div id="upload-status"></div>
+            </div>
+
+            <!-- Правая колонка - список треков -->
+            <div class="tracks-list">
+                <h3>🎶 Загруженные треки <span class="tracks-count" id="tracks-count">0</span></h3>
+                <div id="tracks-container">
+                    <p>Загрузка списка треков...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопки навигации -->
+        <div class="navigation-buttons">
+            {% if room_code %}
+            <a href="{{ url_for('api.host_panel', room_code=room_code) }}" class="btn-nav btn-back-host">
+                ← Вернуться к панели ведущего
+            </a>
+            {% else %}
+            <a href="{{ url_for('api.host_redirect') }}" class="btn-nav btn-back-host">
+                ← Вернуться к панели ведущего
+            </a>
+            {% endif %}
+            <a href="{{ url_for('api.index') }}" class="btn-nav btn-back-home">
+                 На главную
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Загрузка списка треков
+        async function loadTracks() {
+            try {
+                const response = await fetch('/api/music/list');
+                const tracks = await response.json();
+
+                const container = document.getElementById('tracks-container');
+                document.getElementById('tracks-count').textContent = tracks.length;
+
+                if (tracks.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">🎵</div>
+                            <p><strong>Нет загруженных треков</strong></p>
+                            <p>Загрузите первую песню слева!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = tracks.map(track => `
+                    <div class="track-item">
+                        <div class="track-info">
+                            <div class="track-title">🎵 ${track.title}</div>
+                            <div class="track-artist">${track.artist || 'Неизвестный исполнитель'}</div>
+                            <audio controls preload="none">
+                                <source src="${track.url}" type="audio/mpeg">
+                                Ваш браузер не поддерживает аудио.
+                            </audio>
+                        </div>
+                        <div class="track-actions">
+                            <button class="btn-sm btn-danger" onclick="deleteTrack(${track.id})">🗑️ Удалить</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Ошибка загрузки треков:', error);
+                document.getElementById('tracks-container').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">❌</div>
+                        <p>Ошибка загрузки треков</p>
+                        <p><button onclick="loadTracks()" class="btn btn-primary">Попробовать снова</button></p>
+                    </div>
+                `;
+            }
+        }
+
+        // Загрузка нового трека
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const statusDiv = document.getElementById('upload-status');
+            const submitBtn = this.querySelector('button[type="submit"]');
+
+            // Блокируем кнопку на время загрузки
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Загрузка...';
+            statusDiv.innerHTML = '<div class="status-message status-loading">⏳ Загрузка файла...</div>';
+
+            try {
+                const response = await fetch('/admin/music/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.innerHTML = '<div class="status-message status-success">✅ Трек успешно загружен!</div>';
+                    this.reset();
+                    loadTracks(); // Обновляем список
+
+                    // Скрываем сообщение через 3 секунды
+                    setTimeout(() => {
+                        statusDiv.innerHTML = '';
+                    }, 3000);
+                } else {
+                    statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${result.error || 'неизвестная ошибка'}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка сети: ${error}</div>`;
+            } finally {
+                // Разблокируем кнопку
+                submitBtn.disabled = false;
+                submitBtn.textContent = '📤 Загрузить';
+            }
+        });
+
+        // Удаление трека
+        async function deleteTrack(trackId) {
+            if (!confirm('Удалить этот трек?')) return;
+
+            try {
+                const response = await fetch(`/admin/music/${trackId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    loadTracks(); // Обновляем список
+                } else {
+                    alert('Ошибка удаления: ' + (result.error || 'неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка сети: ' + error);
+            }
+        }
+
+        // Загружаем треки при открытии страницы
+        loadTracks();
+    </script>
+</body>
+</html>

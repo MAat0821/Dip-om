@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель ведущего - {{ room.room_code }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .management-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .management-buttons a,
+        .management-buttons button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            transition: all 0.3s;
+        }
+        .btn-music {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+        }
+        .btn-music:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4);
+        }
+        .btn-questions {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+        }
+        .btn-questions:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+        .tracks-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .tracks-info strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Панель ведущего</h1>
+
+        <div class="host-panel">
+            <div class="info-card">
+                <h3> Информация</h3>
+                <p><strong>Код комнаты:</strong></p>
+                <div class="room-code">{{ room.room_code }}</div>
+                <p><strong>Тип игры:</strong> {{ room.game_type }}</p>
+                <p><strong>Статус:</strong> <span class="badge">{{ room.status }}</span></p>
+                <p><strong>Игроков:</strong> <span id="players-count">{{ players|length }}</span></p>
+
+                <h4>👥 Игроки:</h4>
+                <ul class="players-list" id="players-list">
+                    {% for player in players %}
+                    <li>
+                        <span>{{ player.nickname }}</span>
+                        <span>{{ player.score }} баллов</span>
+                    </li>
+                    {% else %}
+                    <li>Пока нет игроков...</li>
+                    {% endfor %}
+                </ul>
+
+                <!-- Информация о загруженных треках -->
+                <div class="tracks-info" id="tracks-info">
+                     Загруженных треков: <strong id="tracks-count">0</strong>
+                </div>
+
+                <!-- Кнопки управления -->
+                <div class="management-buttons">
+                    {% if room.status == 'waiting' %}
+                    <button onclick="startGame()" class="btn btn-host">🚀 Начать игру</button>
+                    {% else %}
+                    <button onclick="nextQuestion()" class="btn btn-primary">➡️ Следующий вопрос</button>
+                    {% endif %}
+
+                    <a href="{{ url_for('api.host_music') }}" class="btn-music">
+                        🎵 Управление музыкой
+                    </a>
+
+                    <a href="{{ url_for('admin.admin_questions') }}" class="btn-questions">
+                        📝 Управление вопросами
+                    </a>
+                </div>
+            </div>
+
+            <div class="game-screen" id="game-screen">
+                {% if room.status == 'waiting' %}
+                <div>
+                    <h2> Ожидание игроков...</h2>
+                    <p style="font-size: 1.2rem;">Покажите код комнаты игрокам</p>
+                </div>
+                {% else %}
+                <div>
+                    <h2>Вопрос #{{ room.current_question }}</h2>
+                    <p style="font-size: 1.2rem;">Игра началась!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="back-link" style="margin-top: 30px;">
+            <a href="{{ url_for('api.index') }}">← Вернуться на главную</a>
+        </div>
+    </div>
+
+    <script>
+        function startGame() {
+            fetch('/api/room/{{ room.room_code }}/start', {method: 'POST'})
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) location.reload();
+                });
+        }
+
+        function nextQuestion() {
+            fetch('/api/room/{{ room.room_code }}/next-question', {method: 'POST'})
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) location.reload();
+                });
+        }
+
+        // Загрузка количества треков
+        async function loadTracksCount() {
+            try {
+                const response = await fetch('/api/music/list');
+                const tracks = await response.json();
+                document.getElementById('tracks-count').textContent = tracks.length;
+
+                // Предупреждение если нет треков для музыкальной игры
+                const gameType = '{{ room.game_type }}';
+                if ((gameType === 'music_test' || gameType === 'guess_melody') && tracks.length === 0) {
+                    document.getElementById('tracks-info').innerHTML =
+                        '⚠️ <strong>Нет загруженных треков!</strong> Добавьте музыку перед началом игры.';
+                    document.getElementById('tracks-info').style.background = '#fff3cd';
+                    document.getElementById('tracks-info').style.color = '#856404';
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки треков:', error);
+            }
+        }
+
+        setInterval(() => {
+            fetch('/api/room/{{ room.room_code }}/players')
+                .then(r => r.json())
+                .then(players => {
+                    const list = document.getElementById('players-list');
+                    document.getElementById('players-count').textContent = players.length;
+
+                    if (players.length === 0) {
+                        list.innerHTML = '<li>Пока нет игроков...</li>';
+                    } else {
+                        list.innerHTML = players.map(p => `
+                            <li>
+                                <span>${p.nickname}</span>
+                                <span>${p.score} баллов</span>
+                            </li>
+                        `).join('');
+                    }
+                });
+        }, 3000);
+
+        // Загружаем количество треков при открытии
+        loadTracksCount();
+    </script>
+</body>
+</html>

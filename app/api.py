@@ -1,295 +1,346 @@
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, send_from_directory
+from werkzeug.utils import secure_filename
+from app.models import db, GameRoom, Player, Question, MusicTrack, generate_room_code
 import os
-import json
 import random
-import io
-import string
-from flask import Blueprint, request, jsonify, send_file
 
-# ==================== 1. НАСТРОЙКА FFMPEG ====================
-FFMPEG_BIN = r"C:\Users\Maat7\OneDrive\Desktop\ffmpeg-8.1.1-essentials_build\bin\ffmpeg.exe"
-FFPROBE_BIN = r"C:\Users\Maat7\OneDrive\Desktop\ffmpeg-8.1.1-essentials_build\bin\ffprobe.exe"
-
-if os.path.exists(FFMPEG_BIN) and os.path.exists(FFPROBE_BIN):
-    os.environ["PATH"] += os.pathsep + os.path.dirname(FFMPEG_BIN)
-    print(f"✅ FFmpeg найден: {os.path.dirname(FFMPEG_BIN)}")
-else:
-    print(f"❌ FFmpeg не найден. Проверьте путь.")
-    FFMPEG_BIN = "ffmpeg"
-    FFPROBE_BIN = "ffprobe"
-
-from pydub import AudioSegment
-
-AudioSegment.converter = FFMPEG_BIN
-AudioSegment.ffprobe = FFPROBE_BIN
-
-from .models import db, Room, Player, Answer
-
-# ==================== 2. БАЗОВЫЕ НАСТРОЙКИ ====================
+# Создаём blueprint'ы
 api_bp = Blueprint('api', __name__)
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SONGS_FILE = os.path.join(BASE_DIR, 'data', 'songs.json')
-AUDIO_DIR = os.path.join(BASE_DIR, 'audio')
-
-try:
-    with open(SONGS_FILE, 'r', encoding='utf-8') as f:
-        SONGS_DB = json.load(f)
-    print(f"✅ Загружено {len(SONGS_DB)} песен")
-except Exception as e:
-    print(f"⚠️ Ошибка загрузки songs.json: {e}")
-    SONGS_DB = []
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
-# ==================== 3. ФУНКЦИИ ОБРАБОТКИ АУДИО ====================
-def get_audio_duration(file_path):
-    """Получает длину аудиофайла в миллисекундах"""
-    try:
-        audio = AudioSegment.from_mp3(file_path)
-        return len(audio)
-    except Exception as e:
-        print(f"❌ Ошибка определения длины файла {file_path}: {e}")
-        return 0
+# ===== ГЛАВНАЯ СТРАНИЦА =====
+@api_bp.route('/')
+def index():
+    """Главная страница - рендерит HTML"""
+    return render_template('index.html')
 
 
-def generate_audio_buffer(song_filename: str, clip_start_ms: int, clip_end_ms: int, silence_point_ms: int):
-    file_path = os.path.join(AUDIO_DIR, song_filename)
-    if not os.path.exists(file_path):
-        print(f"❌ Файл не найден: {file_path}")
-        return None
-
-    try:
-        # Получаем реальную длину файла
-        real_duration = get_audio_duration(file_path)
-        if real_duration == 0:
-            print(f"❌ Невозможно определить длину файла: {file_path}")
-            return None
-
-        # Корректируем границы клипа, если файл короче заявленного
-        clip_start_ms = max(0, min(clip_start_ms, real_duration))
-        clip_end_ms = max(clip_start_ms + 1000, min(clip_end_ms, real_duration))
-        clip_duration_ms = clip_end_ms - clip_start_ms
-
-        # Загружаем аудио
-        audio = AudioSegment.from_mp3(file_path)
-        clip = audio[clip_start_ms:clip_end_ms]
-
-        # Защита от краёв тишины
-        silence_point_ms = max(500, min(silence_point_ms, clip_duration_ms - 2000))
-        silence_dur = 1500  # Длительность тишины в мс
-
-        # Создаём тишину и склеиваем
-        silence = AudioSegment.silent(duration=silence_dur)
-        final_audio = clip[:silence_point_ms].fade_out(100) + silence + clip[silence_point_ms:].fade_in(100)
-
-        # Сохраняем в буфер
-        buffer = io.BytesIO()
-        final_audio.export(buffer, format="mp3")
-        buffer.seek(0)
-        print(
-            f"✅ Готово: [{clip_start_ms}-{clip_end_ms}мс] | Тишина на {silence_point_ms}мс (реальная длина: {real_duration}мс)")
-        return buffer
-    except Exception as e:
-        print(f"🔊 Ошибка аудио: {e}")
-        return None
+# ===== ВЕДУЩИЙ (HOST) =====
+@api_bp.route('/host')
+def host_redirect():
+    """Перенаправление на создание комнаты"""
+    return redirect(url_for('api.host_create'))
 
 
-# ==================== 4. МАРШРУТЫ ====================
-@api_bp.route('/create-room', methods=['POST'])
-def create_room():
-    code = ''.join(random.choices(string.ascii_uppercase + "23456789", k=4))
-    try:
-        new_room = Room(code=code)
-        db.session.add(new_room)
+@api_bp.route('/host/create', methods=['GET', 'POST'])
+def host_create():
+    """Создание новой комнаты"""
+    if request.method == 'POST':
+        host_name = request.form.get('host_name', 'Ведущий')
+        game_type = request.form.get('game_type', 'quiz')
+
+        # Генерируем уникальный код
+        room_code = generate_room_code()
+        while GameRoom.query.filter_by(room_code=room_code).first():
+            room_code = generate_room_code()
+
+        room = GameRoom(
+            room_code=room_code,
+            host_name=host_name,
+            game_type=game_type,
+            status='waiting'
+        )
+
+        db.session.add(room)
         db.session.commit()
-        return jsonify({"success": True, "code": code, "room_id": new_room.id})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+
+        return redirect(url_for('api.host_panel', room_code=room_code))
+
+    return render_template('host_create.html')
 
 
-@api_bp.route('/join-room', methods=['POST'])
+@api_bp.route('/host/<room_code>')
+def host_panel(room_code):
+    """Панель ведущего"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    players = Player.query.filter_by(room_id=room.id, is_connected=True).all()
+    return render_template('host_panel.html', room=room, players=players)
+
+
+@api_bp.route('/host/music')
+@api_bp.route('/host/music/<room_code>')
+def host_music(room_code=None):
+    """Страница управления музыкой для ведущего"""
+    return render_template('host_music.html', room_code=room_code)
+
+
+# ===== ИГРОКИ (PLAYERS) =====
+@api_bp.route('/join', methods=['GET', 'POST'])
 def join_room():
-    data = request.get_json()
-    code = data.get('code', '').strip().upper()
+    """Страница подключения"""
+    if request.method == 'GET':
+        return render_template('join.html')
+
+    # POST обрабатывается через API
+    return redirect(url_for('api.index'))
+
+
+# ===== API МАРШРУТЫ =====
+
+@api_bp.route('/api/status')
+def api_status():
+    """Проверка статуса API"""
+    return jsonify({'message': 'API работает'})
+
+
+@api_bp.route('/api/join', methods=['POST'])
+def api_join():
+    """Подключение игрока к комнате"""
+    data = request.json
+    room_code = data.get('room_code', '').upper()
     nickname = data.get('nickname', '').strip()
-    if not code or not nickname:
-        return jsonify({"success": False, "error": "Укажите код и никнейм"}), 400
 
-    room = Room.query.filter_by(code=code).first()
+    if not room_code or len(room_code) < 4:
+        return jsonify({'success': False, 'error': 'Неверный код комнаты'})
+
+    if not nickname:
+        return jsonify({'success': False, 'error': 'Введите никнейм'})
+
+    room = GameRoom.query.filter_by(room_code=room_code).first()
     if not room:
-        return jsonify({"success": False, "error": "Комната не найдена"}), 404
+        return jsonify({'success': False, 'error': 'Комната не найдена'})
 
-    try:
-        player = Player(nickname=nickname, room_id=room.id)
+    if room.status != 'waiting':
+        return jsonify({'success': False, 'error': 'Игра уже началась'})
+
+    # Проверяем, не присоединился ли уже
+    player = Player.query.filter_by(room_id=room.id, nickname=nickname).first()
+    if not player:
+        player = Player(room_id=room.id, nickname=nickname)
         db.session.add(player)
         db.session.commit()
-        return jsonify({"success": True, "player_id": player.id, "room_id": room.id})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@api_bp.route('/get-quiz', methods=['GET'])
-def get_quiz():
-    if not SONGS_DB:
-        return jsonify({"error": "База пуста"}), 500
-
-    # Выбираем случайную песню
-    song = random.choice(SONGS_DB)
-    full_lyrics = song.get('full_lyrics', '').strip()
-
-    if not full_lyrics or len(full_lyrics) < 10:
-        return jsonify({"error": "Нет данных для теста"}), 500
-
-    words = full_lyrics.split()
-    if len(words) < 3:
-        return jsonify({"error": "Недостаточно слов для теста"}), 500
-
-    # Получаем реальную длину файла
-    file_path = os.path.join(AUDIO_DIR, song.get('file', ''))
-    real_duration_ms = get_audio_duration(file_path)
-
-    # Границы клипа
-    clip_start_ms = song.get('start_time_ms', 0)
-    clip_end_ms = song.get('end_time_ms', 60000)
-
-    # Коррекция, если файл короче
-    if real_duration_ms < clip_end_ms:
-        clip_end_ms = real_duration_ms
-
-    clip_duration_ms = clip_end_ms - clip_start_ms
-    if clip_duration_ms <= 0:
-        return jsonify({"error": "Некорректные временные метки"}), 500
-
-    # 🎯 ГЛАВНОЕ ИСПРАВЛЕНИЕ: ПРОВЕРКА НА РУЧНУЮ СИНХРОНИЗАЦИЮ
-    # Мы ищем в JSON поля 'target_word' и 'silence_time_ms'
-    target_word_manual = song.get('target_word')
-    time_manual = song.get('silence_time_ms')
-
-    target_idx = 0
-    target_word = ""
-
-    # Если в JSON есть точные данные — используем их
-    if target_word_manual and time_manual is not None and target_word_manual in words:
-        target_word = target_word_manual
-        target_idx = words.index(target_word)
-        # Переводим абсолютное время в время относительно начала клипа
-        silence_point_ms = time_manual - clip_start_ms
-        print(f"🎯 ТОЧНАЯ СИНХРОНИЗАЦИЯ: Слово '{target_word}' на {silence_point_ms}мс")
-    else:
-        # Если точных данных нет — берем случайное слово (старый метод)
-        target_idx = random.randint(0, len(words) - 1)
-        target_word = words[target_idx]
-
-        # Старая формула (неточная, но работает если нет таймингов)
-        word_ratio = target_idx / len(words)
-        silence_point_ms = int(word_ratio * clip_duration_ms)
-        print(f"⚠️ АВТО-РАСЧЕТ: Слово '{target_word}' на ~{silence_point_ms}мс")
-
-    # Скрываем слово
-    words[target_idx] = "_" * len(target_word)
-    masked_lyrics = " ".join(words)
-
-    # Защита от краёв
-    silence_point_ms = max(2000, min(silence_point_ms, clip_duration_ms - 3000))
 
     return jsonify({
-        "title": song.get('title', 'Без названия'),
-        "full_lyrics": full_lyrics,
-        "lyrics": masked_lyrics,
-        "answer": target_word,
-        "song_file": song.get('file', ''),
-        "clip_start_ms": clip_start_ms,
-        "clip_end_ms": clip_end_ms,
-        "silence_point_ms": silence_point_ms,
-        "real_duration_ms": real_duration_ms
+        'success': True,
+        'player_id': player.id,
+        'room_code': room_code
     })
 
 
-@api_bp.route('/stream-audio', methods=['GET'])
-def stream_audio():
-    song_file = request.args.get('song')
-    clip_start_ms = request.args.get('clip_start_ms', type=int, default=0)
-    clip_end_ms = request.args.get('clip_end_ms', type=int, default=60000)
-    silence_point_ms = request.args.get('silence_point_ms', type=int, default=15000)
+@api_bp.route('/api/room/<room_code>/status')
+def get_room_status(room_code):
+    """Получить статус комнаты"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    players_count = Player.query.filter_by(room_id=room.id, is_connected=True).count()
 
-    if not song_file:
-        return jsonify({"error": "Не указан файл"}), 400
-
-    buffer = generate_audio_buffer(song_file, clip_start_ms, clip_end_ms, silence_point_ms)
-    if not buffer:
-        return jsonify({"error": "Ошибка обработки аудио"}), 404
-
-    return send_file(buffer, mimetype="audio/mpeg")
+    return jsonify({
+        'status': room.status,
+        'current_question': room.current_question,
+        'players_count': players_count,
+        'game_type': room.game_type
+    })
 
 
-@api_bp.route('/submit-answer', methods=['POST'])
-def submit_answer():
-    data = request.get_json()
-    room_code = data.get('room_code')
-    nickname = data.get('nickname')
-    guess = data.get('guess', '').strip()
-
-    if not room_code or not nickname or not guess:
-        return jsonify({"success": False, "error": "Неполные данные"}), 400
-
-    try:
-        # 1. Находим комнату по коду
-        room = Room.query.filter_by(code=room_code).first()
-        if not room:
-            return jsonify({"success": False, "error": "Комната не найдена"}), 404
-
-        # 2. Находим игрока
-        player = Player.query.filter_by(nickname=nickname, room_id=room.id).first()
-        if not player:
-            player = Player(nickname=nickname, room_id=room.id)
-            db.session.add(player)
-            db.session.flush()
-
-        # 3. Сохраняем ответ
-        answer = Answer(
-            player_id=player.id,
-            room_id=room.id,
-            chosen_word=guess,
-            status='pending'
-        )
-        db.session.add(answer)
-        db.session.commit()
-        print(f"✅ Ответ принят: {nickname} -> {guess}")  # Лог для проверки
-
-        return jsonify({"success": True, "message": "Ответ отправлен"})
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"Ошибка БД при отправке ответа: {e}")
-        return jsonify({"success": False, "error": "Ошибка сервера"}), 500
+@api_bp.route('/api/room/<room_code>/start', methods=['POST'])
+def start_game(room_code):
+    """Начать игру"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    room.status = 'playing'
+    room.current_question = 1
+    db.session.commit()
+    return jsonify({'success': True, 'status': 'playing'})
 
 
-@api_bp.route('/get-answers/<int:room_id>', methods=['GET'])
-def get_answers(room_id):
-    try:
-        # ИЗМЕНЕНИЕ: Показываем ВСЕ ответы, а не только pending, чтобы вы видели их в консоли
-        answers = Answer.query.filter_by(room_id=room_id).order_by(Answer.id.desc()).limit(20).all()
-
-        result = []
-        for a in answers:
-            result.append({
-                "id": a.id,
-                "nickname": a.player.nickname if a.player else "Аноним",
-                "word": a.chosen_word,
-                "status": a.status
-            })
-        return jsonify(result)
-    except Exception as e:
-        print(f"Ошибка get_answers: {e}")
-        return jsonify([])
+@api_bp.route('/api/room/<room_code>/next-question', methods=['POST'])
+def next_question(room_code):
+    """Следующий вопрос"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    room.current_question += 1
+    db.session.commit()
+    return jsonify({'success': True, 'question_number': room.current_question})
 
 
-@api_bp.route('/approve-answer/<int:answer_id>', methods=['POST'])
-def approve_answer(answer_id):
-    ans = Answer.query.get(answer_id)
-    if ans:
-        ans.status = 'approved'
-        db.session.commit()
-        return jsonify({"success": True})
-    return jsonify({"success": False, "error": "Не найден"}), 404
+@api_bp.route('/api/room/<room_code>/leaderboard')
+def get_leaderboard(room_code):
+    """Получить таблицу лидеров"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    players = Player.query.filter_by(room_id=room.id, is_connected=True) \
+        .order_by(Player.score.desc()).all()
+
+    return jsonify([{
+        'nickname': p.nickname,
+        'score': p.score
+    } for p in players])
+
+
+@api_bp.route('/api/room/<room_code>/players')
+def get_players(room_code):
+    """Получить список игроков"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    players = Player.query.filter_by(room_id=room.id, is_connected=True).all()
+
+    return jsonify([{
+        'id': p.id,
+        'nickname': p.nickname,
+        'score': p.score
+    } for p in players])
+
+
+@api_bp.route('/api/player/<int:player_id>/answer', methods=['POST'])
+def submit_answer(player_id):
+    """Отправить ответ"""
+    data = request.json
+    player = Player.query.get_or_404(player_id)
+
+    is_correct = data.get('is_correct', False)
+
+    # Обновляем счёт если ответ правильный
+    if is_correct:
+        player.score += 10
+
+    db.session.commit()
+    return jsonify({'success': True, 'score': player.score})
+
+
+# ===== НОВЫЙ МАРШРУТ: Список вопросов =====
+@api_bp.route('/api/questions/list')
+def get_questions_list():
+    """Получить список всех вопросов"""
+    questions = Question.query.order_by(Question.round_number).all()
+    return jsonify([{
+        'id': q.id,
+        'text': q.text,
+        'correct_answer': q.correct_answer,
+        'variant_1': q.variant_1,
+        'variant_2': q.variant_2,
+        'variant_3': q.variant_3,
+        'question_type': q.question_type,
+        'round_number': q.round_number,
+        'points': q.points
+    } for q in questions])
+
+
+# ===== СТРАНИЦЫ ИГРОКА =====
+@api_bp.route('/player/<room_code>/<int:player_id>')
+def player_lobby(room_code, player_id):
+    """Лобби игрока"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    player = Player.query.get_or_404(player_id)
+    return render_template('player_lobby.html', room=room, player=player)
+
+
+@api_bp.route('/player/<room_code>/<int:player_id>/game')
+def player_game(room_code, player_id):
+    """Игровой экран игрока"""
+    room = GameRoom.query.filter_by(room_code=room_code).first_or_404()
+    player = Player.query.get_or_404(player_id)
+    return render_template('player_game.html', room=room, player=player)
+
+
+# ===== РАЗДАЧА АУДИО =====
+@api_bp.route('/audio/<filename>')
+def serve_audio(filename):
+    """Раздача аудиофайлов из папки audio/"""
+    audio_folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'audio')
+    print(f"🎵 Ищем аудио в: {audio_folder}/{filename}")
+    return send_from_directory(audio_folder, filename)
+
+
+@api_bp.route('/api/music/list')
+def get_music_list():
+    """Получить список всех загруженных треков"""
+    tracks = MusicTrack.query.filter_by(is_active=True).all()
+    return jsonify([{
+        'id': t.id,
+        'title': t.title,
+        'artist': t.artist,
+        'filename': t.filename,
+        'url': f'/audio/{t.filename}'
+    } for t in tracks])
+
+
+# ===== АДМИНКА =====
+@admin_bp.route('/')
+def admin_dashboard():
+    """Главная страница админки"""
+    questions_count = Question.query.count()
+    tracks_count = MusicTrack.query.count()
+    return render_template('admin/dashboard.html',
+                           questions_count=questions_count,
+                           tracks_count=tracks_count)
+
+
+@admin_bp.route('/questions')
+@admin_bp.route('/questions/<room_code>')
+def admin_questions(room_code=None):
+    """Список вопросов"""
+    questions = Question.query.order_by(Question.round_number).all()
+    return render_template('admin/questions.html', questions=questions, room_code=room_code)
+
+
+@admin_bp.route('/questions/add', methods=['POST'])
+def add_question():
+    """Добавить вопрос"""
+    data = request.json
+    question = Question(
+        text=data['text'],
+        correct_answer=data['correct_answer'],
+        variant_1=data.get('variant_1', ''),
+        variant_2=data.get('variant_2', ''),
+        variant_3=data.get('variant_3', ''),
+        question_type=data.get('question_type', 'text'),
+        round_number=data.get('round_number', 1),
+        points=data.get('points', 1)
+    )
+    db.session.add(question)
+    db.session.commit()
+    return jsonify({'success': True, 'id': question.id})
+
+
+@admin_bp.route('/questions/<int:question_id>', methods=['DELETE'])
+def delete_question(question_id):
+    """Удалить вопрос"""
+    question = Question.query.get_or_404(question_id)
+    db.session.delete(question)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/music')
+@admin_bp.route('/music/<room_code>')
+def admin_music(room_code=None):
+    """Список треков"""
+    tracks = MusicTrack.query.order_by(MusicTrack.upload_date.desc()).all()
+    return render_template('admin/music.html', tracks=tracks, room_code=room_code)
+
+
+@admin_bp.route('/music/upload', methods=['POST'])
+def upload_music():
+    """Загрузить трек"""
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'Нет файла'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'Файл не выбран'}), 400
+
+    filename = secure_filename(file.filename)
+
+    # Сохраняем в папку audio/ (в корне проекта)
+    audio_folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'audio')
+    os.makedirs(audio_folder, exist_ok=True)
+    filepath = os.path.join(audio_folder, filename)
+    file.save(filepath)
+
+    track = MusicTrack(
+        title=request.form.get('title', filename),
+        artist=request.form.get('artist', ''),
+        filename=filename,
+        filepath=filepath
+    )
+    db.session.add(track)
+    db.session.commit()
+
+    return jsonify({'success': True, 'id': track.id})
+
+
+@admin_bp.route('/music/<int:track_id>', methods=['DELETE'])
+def delete_music(track_id):
+    """Удалить трек"""
+    track = MusicTrack.query.get_or_404(track_id)
+    if os.path.exists(track.filepath):
+        os.remove(track.filepath)
+    db.session.delete(track)
+    db.session.commit()
+    return jsonify({'success': True})

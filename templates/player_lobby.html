@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ожидание - Квиз</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .lobby {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lobby">
+            <h1>🎮 {{ player.nickname }}</h1>
+            <p style="font-size: 1.2rem;">Комната: <strong>{{ room.room_code }}</strong></p>
+
+            <div class="spinner"></div>
+
+            <h3>⏳ Ожидание начала игры...</h3>
+            <p>Ведущий скоро начнёт игру</p>
+        </div>
+    </div>
+
+    <script>
+        setInterval(() => {
+            fetch('/api/room/{{ room.room_code }}/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'playing') {
+                        window.location.href = '/player/{{ room.room_code }}/{{ player.id }}/game';
+                    }
+                });
+        }, 2000);
+    </script>
+</body>
+</html>

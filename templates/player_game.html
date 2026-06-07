@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игра - {{ player.nickname }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .game-container {
+            text-align: center;
+            padding: 20px;
+        }
+        .score {
+            font-size: 1.5rem;
+            color: #667eea;
+            font-weight: bold;
+        }
+        .question-area {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        .answers {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .answer-btn {
+            padding: 20px;
+            font-size: 1.1rem;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .answer-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        .answer-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .game-type-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+        .audio-player {
+            margin: 20px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            color: white;
+        }
+        .audio-player h4 {
+            margin: 0 0 15px 0;
+            color: white;
+        }
+        .play-btn {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .play-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .play-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .playing {
+            background: #28a745 !important;
+            color: white !important;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .audio-status {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #ffeb3b;
+        }
+        /* 🔥 Стили для экрана окончания игры */
+        .game-over {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            margin: 20px 0;
+        }
+        .game-over h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+        .final-score {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #ffeb3b;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 4px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #ffeb3b;
+            transition: width 0.3s;
+        }
+        .rounds-info {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="game-container">
+            <h2>{{ player.nickname }}</h2>
+            <p class="score">💰 <span id="score">{{ player.score }}</span> баллов</p>
+
+            <div class="game-type-badge">
+                Тип: {{ room.game_type }}
+            </div>
+
+            <!-- Прогресс игры -->
+            <div class="rounds-info" id="rounds-info">
+                Вопрос <span id="current-round">1</span> из <span id="total-rounds">5</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 20%;"></div>
+                </div>
+            </div>
+
+            <div class="question-area" id="question-area">
+                <h3>Вопрос #<span id="q-number">1</span></h3>
+                <p id="question-text">Загрузка вопроса...</p>
+
+                <!-- Аудио плеер -->
+                <div class="audio-player" id="audio-container" style="display: none;">
+                    <h4>🎵 Прослушайте фрагмент</h4>
+                    <audio id="audio-element" preload="auto">
+                        <source id="audio-source" src="" type="audio/mpeg">
+                    </audio>
+                    <button class="play-btn" id="play-btn" onclick="toggleAudio()">▶️ Воспроизвести</button>
+                    <button class="play-btn" onclick="stopAudio()">⏹️ Стоп</button>
+                    <div class="audio-status" id="audio-status"></div>
+                </div>
+
+                <div class="answers" id="answers"></div>
+            </div>
+
+            <div id="result-area" style="display: none;">
+                <h3 id="result-message"></h3>
+                <p>Ожидание следующего вопроса...</p>
+                <button onclick="resetQuestion()" class="btn btn-primary" style="margin-top: 20px;" id="next-btn">
+                    Следующий вопрос
+                </button>
+            </div>
+
+            <!-- 🔥 Экран окончания игры -->
+            <div id="game-over-area" style="display: none;">
+                <div class="game-over">
+                    <h2>🏆 Игра окончена!</h2>
+                    <p style="font-size: 1.2rem;">Поздравляем с завершением игры!</p>
+                    <div class="final-score">
+                        💰 <span id="final-score">0</span> баллов
+                    </div>
+                    <p style="margin-top: 20px;">Всего вопросов: <strong id="final-rounds">5</strong></p>
+                    <p>Спасибо за игру! 🎉</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let currentQuestion = 1;
+    let hasAnswered = false;
+    let isPlaying = false;
+    let audioElement = null;
+    let musicTracks = [];
+
+    const gameType = '{{ room.game_type }}';
+
+    // 🔥 ОГРАНИЧЕНИЕ РАУНДОВ
+    const MAX_ROUNDS = 5;  // Максимум 5 раундов в игре
+
+    async function loadMusicTracks() {
+        try {
+            const response = await fetch('/api/music/list');
+            musicTracks = await response.json();
+            console.log('Загружено треков:', musicTracks.length);
+
+            // 🔥 Для музыкальных игр ограничиваем раунды количеством треков
+            if ((gameType === 'music_test' || gameType === 'guess_melody') && musicTracks.length > 0) {
+                // Используем минимум из MAX_ROUNDS и количества треков
+                const effectiveRounds = Math.min(MAX_ROUNDS, musicTracks.length);
+                document.getElementById('total-rounds').textContent = effectiveRounds;
+            } else {
+                document.getElementById('total-rounds').textContent = MAX_ROUNDS;
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки треков:', error);
+            musicTracks = [];
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        audioElement = document.getElementById('audio-element');
+
+        audioElement.addEventListener('error', function(e) {
+            console.error('Ошибка загрузки аудио:', e);
+            document.getElementById('audio-status').textContent = '⚠️ Ошибка загрузки файла';
+        });
+
+        audioElement.addEventListener('canplay', function() {
+            console.log('✅ Аудио готово к воспроизведению');
+            document.getElementById('audio-status').textContent = '✅ Готово к воспроизведению';
+        });
+
+        audioElement.addEventListener('ended', function() {
+            isPlaying = false;
+            document.getElementById('play-btn').textContent = '▶️ Воспроизвести';
+            document.getElementById('play-btn').classList.remove('playing');
+        });
+
+        await loadMusicTracks();
+        loadQuestion();
+    });
+
+    // 🔥 Функция проверки окончания игры
+    function isGameOver() {
+        let effectiveMax = MAX_ROUNDS;
+
+        // Для музыкальных игр - не больше количества треков
+        if ((gameType === 'music_test' || gameType === 'guess_melody') && musicTracks.length > 0) {
+            effectiveMax = Math.min(MAX_ROUNDS, musicTracks.length);
+        }
+
+        return currentQuestion > effectiveMax;
+    }
+
+    // 🔥 Функция показа экрана окончания игры
+    function showGameOver() {
+        document.getElementById('question-area').style.display = 'none';
+        document.getElementById('result-area').style.display = 'none';
+        document.getElementById('rounds-info').style.display = 'none';
+        document.getElementById('game-over-area').style.display = 'block';
+
+        // Устанавливаем финальный счёт
+        document.getElementById('final-score').textContent = document.getElementById('score').textContent;
+
+        let effectiveMax = MAX_ROUNDS;
+        if ((gameType === 'music_test' || gameType === 'guess_melody') && musicTracks.length > 0) {
+            effectiveMax = Math.min(MAX_ROUNDS, musicTracks.length);
+        }
+        document.getElementById('final-rounds').textContent = effectiveMax;
+
+        stopAudio();
+    }
+
+    // 🔥 Обновление прогресс-бара
+    function updateProgress() {
+        let effectiveMax = MAX_ROUNDS;
+        if ((gameType === 'music_test' || gameType === 'guess_melody') && musicTracks.length > 0) {
+            effectiveMax = Math.min(MAX_ROUNDS, musicTracks.length);
+        }
+
+        document.getElementById('current-round').textContent = currentQuestion;
+        document.getElementById('total-rounds').textContent = effectiveMax;
+
+        const progress = (currentQuestion / effectiveMax) * 100;
+        document.getElementById('progress-fill').style.width = progress + '%';
+    }
+
+    function loadQuestion() {
+        // 🔥 Проверяем, не окончена ли игра
+        if (isGameOver()) {
+            showGameOver();
+            return;
+        }
+
+        updateProgress();
+
+        let currentQ;
+
+        if (gameType === 'music_test' || gameType === 'guess_melody') {
+            if (musicTracks.length === 0) {
+                document.getElementById('question-text').textContent = '⚠️ Нет загруженных треков! Попросите ведущего добавить музыку.';
+                document.getElementById('answers').innerHTML = '';
+                document.getElementById('audio-container').style.display = 'none';
+                return;
+            }
+
+            const track = musicTracks[(currentQuestion - 1) % musicTracks.length];
+            currentQ = {
+                num: currentQuestion,
+                text: gameType === 'music_test'
+                    ? `🎵 Вставьте пропущенное слово из песни "${track.title}"`
+                    : `🎵 Угадайте песню: "${track.title}"`,
+                audio: track.url,
+                answers: generateAnswers(track)
+            };
+        } else {
+            const quizQuestions = [
+                {
+                    num: 1,
+                    text: "Столица России?",
+                    answers: [
+                        {id: 1, text: 'Москва', correct: true},
+                        {id: 2, text: 'Санкт-Петербург', correct: false},
+                        {id: 3, text: 'Казань', correct: false},
+                        {id: 4, text: 'Сочи', correct: false}
+                    ]
+                },
+                {
+                    num: 2,
+                    text: "Сколько планет в Солнечной системе?",
+                    answers: [
+                        {id: 1, text: '7', correct: false},
+                        {id: 2, text: '8', correct: true},
+                        {id: 3, text: '9', correct: false},
+                        {id: 4, text: '10', correct: false}
+                    ]
+                },
+                {
+                    num: 3,
+                    text: "Кто написал 'Войну и мир'?",
+                    answers: [
+                        {id: 1, text: 'Достоевский', correct: false},
+                        {id: 2, text: 'Толстой', correct: true},
+                        {id: 3, text: 'Пушкин', correct: false},
+                        {id: 4, text: 'Чехов', correct: false}
+                    ]
+                },
+                {
+                    num: 4,
+                    text: "Какой язык программирования мы используем?",
+                    answers: [
+                        {id: 1, text: 'Java', correct: false},
+                        {id: 2, text: 'Python', correct: true},
+                        {id: 3, text: 'JavaScript', correct: false},
+                        {id: 4, text: 'C++', correct: false}
+                    ]
+                },
+                {
+                    num: 5,
+                    text: "Сколько будет 2 + 2 × 2?",
+                    answers: [
+                        {id: 1, text: '6', correct: true},
+                        {id: 2, text: '8', correct: false},
+                        {id: 3, text: '4', correct: false},
+                        {id: 4, text: '10', correct: false}
+                    ]
+                }
+            ];
+            currentQ = quizQuestions.find(q => q.num === currentQuestion);
+        }
+
+        if (!currentQ) {
+            showGameOver();
+            return;
+        }
+
+        document.getElementById('q-number').textContent = currentQuestion;
+        document.getElementById('question-text').textContent = currentQ.text;
+
+        const audioContainer = document.getElementById('audio-container');
+        const audioSource = document.getElementById('audio-source');
+        const audioStatus = document.getElementById('audio-status');
+
+        if (currentQ.audio && (gameType === 'music_test' || gameType === 'guess_melody')) {
+            audioContainer.style.display = 'block';
+            audioSource.src = currentQ.audio;
+            audioElement.load();
+
+            isPlaying = false;
+            document.getElementById('play-btn').textContent = '▶️ Воспроизвести';
+            document.getElementById('play-btn').classList.remove('playing');
+            audioStatus.textContent = '⏳ Загрузка...';
+
+            console.log('Загружаем аудио:', currentQ.audio);
+        } else {
+            audioContainer.style.display = 'none';
+        }
+
+        const container = document.getElementById('answers');
+        container.innerHTML = currentQ.answers.map(a => `
+            <button class="answer-btn" onclick="submitAnswer(${a.id}, ${a.correct})">
+                ${a.text}
+            </button>
+        `).join('');
+
+        hasAnswered = false;
+    }
+
+    function generateAnswers(correctTrack) {
+        const answers = [
+            {id: 1, text: correctTrack.title, correct: true}
+        ];
+
+        const otherTracks = musicTracks.filter(t => t.id !== correctTrack.id);
+        for (let i = 0; i < 3 && i < otherTracks.length; i++) {
+            answers.push({
+                id: i + 2,
+                text: otherTracks[i].title,
+                correct: false
+            });
+        }
+
+        while (answers.length < 4) {
+            answers.push({
+                id: answers.length + 1,
+                text: 'Неизвестная песня ' + (answers.length + 1),
+                correct: false
+            });
+        }
+
+        return answers.sort(() => Math.random() - 0.5);
+    }
+
+    function toggleAudio() {
+        if (!audioElement) return;
+
+        const playBtn = document.getElementById('play-btn');
+        const audioStatus = document.getElementById('audio-status');
+
+        if (isPlaying) {
+            audioElement.pause();
+            playBtn.textContent = '▶️ Воспроизвести';
+            playBtn.classList.remove('playing');
+            isPlaying = false;
+            audioStatus.textContent = '⏸️ Пауза';
+        } else {
+            const playPromise = audioElement.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    playBtn.textContent = '⏸️ Пауза';
+                    playBtn.classList.add('playing');
+                    isPlaying = true;
+                    audioStatus.textContent = '▶️ Воспроизведение...';
+                }).catch(err => {
+                    console.error('Ошибка воспроизведения:', err);
+                    audioStatus.textContent = '⚠️ Ошибка: ' + err.message;
+                });
+            }
+        }
+    }
+
+    function stopAudio() {
+        if (!audioElement) return;
+        audioElement.pause();
+        audioElement.currentTime = 0;
+        isPlaying = false;
+        const playBtn = document.getElementById('play-btn');
+        if (playBtn) {
+            playBtn.textContent = '▶️ Воспроизвести';
+            playBtn.classList.remove('playing');
+        }
+    }
+
+    function submitAnswer(answerId, isCorrect) {
+        if (hasAnswered) return;
+        hasAnswered = true;
+
+        stopAudio();
+
+        document.querySelectorAll('.answer-btn').forEach(btn => {
+            btn.disabled = true;
+        });
+
+        fetch('/api/player/{{ player.id }}/answer', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                question_id: currentQuestion,
+                answer: answerId,
+                is_correct: isCorrect
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('question-area').style.display = 'none';
+            document.getElementById('result-area').style.display = 'block';
+
+            if (data.score) {
+                document.getElementById('score').textContent = data.score;
+            }
+
+            const msg = document.getElementById('result-message');
+            if (isCorrect) {
+                msg.textContent = '✅ Правильно! +10 баллов';
+                msg.style.color = '#28a745';
+            } else {
+                msg.textContent = '❌ Неправильно';
+                msg.style.color = '#dc3545';
+            }
+
+            // 🔥 Если это был последний вопрос - меняем текст кнопки
+            if (currentQuestion >= MAX_ROUNDS ||
+                ((gameType === 'music_test' || gameType === 'guess_melody') &&
+                 currentQuestion >= musicTracks.length)) {
+                document.getElementById('next-btn').textContent = '🏆 Завершить игру';
+            }
+        });
+    }
+
+    function resetQuestion() {
+        currentQuestion++;
+
+        // 🔥 Проверяем, не окончена ли игра
+        if (isGameOver()) {
+            showGameOver();
+            return;
+        }
+
+        document.getElementById('question-area').style.display = 'block';
+        document.getElementById('result-area').style.display = 'none';
+        stopAudio();
+        loadQuestion();
+    }
+    </script>
+</body>
+</html>

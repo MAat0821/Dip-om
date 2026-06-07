@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление вопросами - Квиз</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .questions-panel {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .add-card, .questions-list {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        textarea.form-control {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .question-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+        .question-info {
+            flex: 1;
+        }
+        .question-text {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        .question-meta {
+            color: #666;
+            font-size: 0.85rem;
+        }
+        .question-meta span {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            margin-right: 5px;
+        }
+        .btn-sm {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .navigation-buttons {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-nav {
+            padding: 12px 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .btn-back-host {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-back-host:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-back-home {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-back-home:hover {
+            background: #5a6268;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .status-message {
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.95rem;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 Управление вопросами</h1>
+
+        <div class="questions-panel">
+            <!-- Левая колонка - добавление вопроса -->
+            <div class="add-card">
+                <h3>➕ Добавить новый вопрос</h3>
+                <form id="addQuestionForm">
+                    <div class="form-group">
+                        <label for="text">Текст вопроса</label>
+                        <textarea id="text" name="text" class="form-control" required 
+                                  placeholder="Введите текст вопроса"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="correct_answer">Правильный ответ</label>
+                        <input type="text" id="correct_answer" name="correct_answer" 
+                               class="form-control" required placeholder="Правильный ответ">
+                    </div>
+                    <div class="form-group">
+                        <label for="variant_1">Вариант 1 (неправильный)</label>
+                        <input type="text" id="variant_1" name="variant_1" 
+                               class="form-control" placeholder="Неправильный вариант">
+                    </div>
+                    <div class="form-group">
+                        <label for="variant_2">Вариант 2 (неправильный)</label>
+                        <input type="text" id="variant_2" name="variant_2" 
+                               class="form-control" placeholder="Неправильный вариант">
+                    </div>
+                    <div class="form-group">
+                        <label for="variant_3">Вариант 3 (неправильный)</label>
+                        <input type="text" id="variant_3" name="variant_3" 
+                               class="form-control" placeholder="Неправильный вариант">
+                    </div>
+                    <div class="form-group">
+                        <label for="round_number">Номер раунда</label>
+                        <input type="number" id="round_number" name="round_number" 
+                               class="form-control" value="1" min="1">
+                    </div>
+                    <button type="submit" class="btn btn-host" style="width: 100%;">💾 Сохранить вопрос</button>
+                </form>
+                <div id="status-message"></div>
+            </div>
+
+            <!-- Правая колонка - список вопросов -->
+            <div class="questions-list">
+                <h3>📋 Список вопросов (<span id="questions-count">0</span>)</h3>
+                <div id="questions-container">
+                    <p>Загрузка...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Навигация -->
+        <div class="navigation-buttons">
+            {% if room_code %}
+            <a href="{{ url_for('api.host_panel', room_code=room_code) }}" class="btn-nav btn-back-host">
+                ← Вернуться к панели ведущего
+            </a>
+            {% endif %}
+            <a href="{{ url_for('api.index') }}" class="btn-nav btn-back-home">
+                🏠 На главную
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Загрузка списка вопросов
+        async function loadQuestions() {
+            try {
+                const response = await fetch('/api/questions/list');
+                const questions = await response.json();
+                
+                const container = document.getElementById('questions-container');
+                document.getElementById('questions-count').textContent = questions.length;
+                
+                if (questions.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>Нет добавленных вопросов</p><p>Добавьте первый вопрос слева!</p></div>';
+                    return;
+                }
+                
+                container.innerHTML = questions.map(q => `
+                    <div class="question-item">
+                        <div class="question-info">
+                            <div class="question-text">${q.text}</div>
+                            <div class="question-meta">
+                                <span>✅ ${q.correct_answer}</span>
+                                <span>Раунд: ${q.round_number}</span>
+                                <span>Тип: ${q.question_type || 'text'}</span>
+                            </div>
+                        </div>
+                        <button class="btn-sm btn-danger" onclick="deleteQuestion(${q.id})">🗑️ Удалить</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Ошибка загрузки вопросов:', error);
+                document.getElementById('questions-container').innerHTML = '<p>Ошибка загрузки</p>';
+            }
+        }
+
+        // Добавление вопроса
+        document.getElementById('addQuestionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+            const statusDiv = document.getElementById('status-message');
+            
+            statusDiv.innerHTML = '<div class="status-message status-success">⏳ Сохранение...</div>';
+            
+            try {
+                const response = await fetch('/admin/questions/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.innerHTML = '<div class="status-message status-success">✅ Вопрос добавлен!</div>';
+                    this.reset();
+                    document.getElementById('round_number').value = '1';
+                    loadQuestions();
+                    
+                    setTimeout(() => {
+                        statusDiv.innerHTML = '';
+                    }, 3000);
+                } else {
+                    statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${result.error || 'неизвестная ошибка'}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка сети: ${error}</div>`;
+            }
+        });
+
+        // Удаление вопроса
+        async function deleteQuestion(id) {
+            if (!confirm('Удалить этот вопрос?')) return;
+            
+            try {
+                const response = await fetch(`/admin/questions/${id}`, {method: 'DELETE'});
+                const result = await response.json();
+                
+                if (result.success) {
+                    loadQuestions();
+                } else {
+                    alert('Ошибка удаления: ' + (result.error || 'неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка сети: ' + error);
+            }
+        }
+
+        // Загружаем вопросы при открытии
+        loadQuestions();
+    </script>
+</body>
+</html>
